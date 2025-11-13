@@ -1,20 +1,14 @@
 const express = require('express');
+// 💡 修正箇所: youtubei.jsのエクスポート全体を取得し、Clientクラスを抽出
 const youtubei = require('youtubei.js');
-
-// 💡 最終修正箇所: Clientを確実に取得するためのロジック
-// パッケージの構造が Client, { Client }, または default.Client のいずれであっても対応を試みる
-const Client = youtubei.Client || youtubei.default?.Client || youtubei;
-
-// TypeError: Client is not a constructor を避けるため、Classであることを確認
-if (typeof Client !== 'function' || !/^\s*class\s+/.test(Client.toString())) {
-    console.error("Error: Could not find Client class in youtubei.js export. Check the package version.");
-    process.exit(1); 
-}
-
+// 多くのESMライブラリは、CommonJS環境でimportされると、exportされたクラスがトップレベルまたは.defaultにあるため、
+// 以前のエラーを解消するためにこの方法に戻します。
+const Client = youtubei.Client || youtubei.default?.Client || youtubei; 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Clientの初期化
+// Clientのインスタンス化
+// Clientが正しく取得されていれば、TypeErrorは発生しません。
 const client = new Client(); 
 
 app.use(express.json());
@@ -33,6 +27,7 @@ app.get('/get/:videoid', async (req, res) => {
     const videoId = req.params.videoid;
 
     try {
+        // Clientインスタンスを通じてメソッドを呼び出す (正しい使い方)
         const videoInfo = await client.getVideo(videoId);
 
         const formats = videoInfo.formats; 
