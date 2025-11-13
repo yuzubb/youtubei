@@ -1,25 +1,34 @@
-// index.js
-
+import YouTube from 'youtubei.js'; 
 import express from 'express';
-import { YouTube } from 'youtubei.js';
 
 const app = express();
-// Renderの環境変数からポートを取得するか、デフォルトで3000を使用
+// Renderは環境変数PORTを設定します
 const PORT = process.env.PORT || 3000; 
 
-// YouTubeインスタンスの初期化
-// 'youtubei.js'は非同期で初期化される可能性があるため、IIFEを使用
+// YouTubeインスタンスの初期化を、アプリの起動前に行う
 let youtube;
 (async () => {
     try {
-        youtube = await new YouTube({
-            // オプションがあれば追加
-        });
-        console.log('YouTube client initialized.');
+        // YouTubeクラスのインスタンス化
+        youtube = await new YouTube();
+        console.log('✅ YouTube client initialized.');
     } catch (error) {
-        console.error('Failed to initialize YouTube client:', error);
+        console.error('❌ Failed to initialize YouTube client:', error);
     }
 })();
+
+// CORSエラーを避けるため、全オリジンからのアクセスを許可
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+});
+
+// ヘルスチェック用エンドポイント (Renderがサーバーの生存確認に使用)
+app.get('/', (req, res) => {
+    res.status(200).send('API Server is running!');
+});
 
 
 /**
@@ -30,32 +39,23 @@ app.get('/get/:videoid', async (req, res) => {
     const { videoid } = req.params;
 
     if (!youtube) {
+        // 初期化が完了していない場合は503を返す
         return res.status(503).json({ error: 'Server not ready. YouTube client is still initializing.' });
     }
 
-    if (!videoid) {
-        return res.status(400).json({ error: 'Video ID is required.' });
+    if (!videoid || videoid.length !== 11) {
+        return res.status(400).json({ error: 'Invalid Video ID format.' });
     }
 
     try {
         console.log(`Fetching related for video: ${videoid}`);
         
-        // 関連動画を取得するためのロジック
-        // youtubei.jsのメソッドはバージョンによって異なる場合があるため、
-        // 公式ドキュメント(e.g., youtube.getRelated, youtube.getInfo)を参照してください。
-        
-        // 例: 動画情報全体を取得し、その中の関連動画セクションを利用
+        // youtubei.jsで動画情報を取得
         const videoInfo = await youtube.getInfo(videoid);
         
-        // 'videoInfo.related' や 'videoInfo.data.contents' などの場所に関連動画のリストがあるはずです。
-        // ライブラリのバージョンによって構造が異なるため、適切なパスを確認してください。
-        const relatedVideos = videoInfo?.related; // 関連動画セクションを抽出する例
+        // 関連動画は 'related' プロパティにあるはずです
+        const relatedVideos = videoInfo?.related || []; 
 
-        if (!relatedVideos) {
-             return res.status(404).json({ error: 'Related videos not found or API structure changed.' });
-        }
-        
-        // 取得したデータをクライアントに返します
         res.json({
             video_id: videoid,
             related_videos_count: relatedVideos.length,
@@ -64,8 +64,14 @@ app.get('/get/:videoid', async (req, res) => {
 
     } catch (error) {
         console.error(`Error fetching related videos for ${videoid}:`, error);
+        
+        // YouTube APIから見つからないなどのエラーの場合は404を返す
+        if (error.message.includes('No video found') || error.message.includes('404')) {
+             return res.status(404).json({ error: 'Video not found or is private/deleted.' });
+        }
+        
         res.status(500).json({ 
-            error: 'Failed to retrieve related videos from YouTube.', 
+            error: 'Failed to retrieve data from YouTube.', 
             details: error.message 
         });
     }
@@ -73,6 +79,5 @@ app.get('/get/:videoid', async (req, res) => {
 
 // サーバーの起動
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Access endpoint: http://localhost:${PORT}/get/dQw4w9WgXcQ (Example)`);
+    console.log(`🚀 Server listening on port ${PORT}`);
 });
