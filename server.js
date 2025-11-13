@@ -3,19 +3,26 @@ const youtubei = require('youtubei.js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 💡 修正箇所: Clientコンストラクタを確実に取得。
-const Client = youtubei.Client || youtubei; 
+// =========================================================
+// 💡 修正箇所: Clientコンストラクタを確実に取得するロジック
+// =========================================================
+let Client = youtubei.Client || youtubei; 
+
+// もし上記で取得できず、かつ youtubei.default がコンストラクタならそれを Client として使用する
+if (typeof Client !== 'function' && youtubei.default && typeof youtubei.default === 'function') {
+    Client = youtubei.default;
+}
 
 // ClientがFunction（コンストラクタ）として取得できていない場合は致命的なエラー
 if (typeof Client !== 'function') {
-    console.error("Critical Error: The imported 'youtubei.js' object is not a valid constructor.");
+    console.error("Critical Error: The imported 'youtubei.js' object is not a valid constructor. Please check the library's documentation for the correct import method.");
     process.exit(1); 
 }
+// =========================================================
 
 const client = new Client(); 
 
 // 🚨 重要なチェック: Clientインスタンスに getWatch メソッドが存在するか確認
-// 関連動画の取得には通常 getWatch が使用されます
 if (typeof client.getWatch !== 'function') {
     console.error("Critical Error: The Client instance does not have a 'getWatch' method. Please check your youtubei.js version.");
     process.exit(1);
@@ -23,6 +30,7 @@ if (typeof client.getWatch !== 'function') {
 
 app.use(express.json());
 
+// CORS設定
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -39,12 +47,11 @@ app.get('/get/:videoid', async (req, res) => {
 
     try {
         // 1. getWatch() を使用して視聴ページ全体のデータを取得
-        // 関連動画はこのデータに含まれていることが多い
+        // 関連動画はこのデータに含まれています
         const watchPage = await client.getWatch(videoId); 
 
         // 2. 関連動画のデータを抽出
         // youtubei.js のバージョンによって、このパスは異なる場合があります。
-        // 一般的には secondary_results に関連動画のリストが含まれています。
         const relatedVideos = watchPage.secondary_results.results || [];
 
         // 3. 必要な情報に整形する
@@ -68,7 +75,7 @@ app.get('/get/:videoid', async (req, res) => {
         });
 
     } catch (error) {
-        // 関連動画の取得に失敗した場合（動画が存在しない、APIのパスが変わったなど）
+        // 関連動画の取得に失敗した場合
         res.status(500).json({ 
             error: 'Failed to fetch related videos using youtubei.js.',
             detail: error.message,
@@ -77,10 +84,12 @@ app.get('/get/:videoid', async (req, res) => {
     }
 });
 
+// ルートパス
 app.get('/', (req, res) => {
     res.send('API is running. Use /get/:videoid to fetch related videos.');
 });
 
+// サーバー起動
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
