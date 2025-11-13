@@ -1,12 +1,20 @@
 const express = require('express');
-// 💡 修正箇所1: youtubei.jsのエクスポート全体を取得
 const youtubei = require('youtubei.js');
-// 💡 修正箇所2: 取得したオブジェクトからClientクラスを取り出す
-const { Client } = youtubei; 
+
+// 💡 最終修正箇所: Clientを確実に取得するためのロジック
+// パッケージの構造が Client, { Client }, または default.Client のいずれであっても対応を試みる
+const Client = youtubei.Client || youtubei.default?.Client || youtubei;
+
+// TypeError: Client is not a constructor を避けるため、Classであることを確認
+if (typeof Client !== 'function' || !/^\s*class\s+/.test(Client.toString())) {
+    console.error("Error: Could not find Client class in youtubei.js export. Check the package version.");
+    process.exit(1); 
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 修正されたClientの初期化
+// Clientの初期化
 const client = new Client(); 
 
 app.use(express.json());
