@@ -1,14 +1,18 @@
 {
-  "name": "youtubei-stream-api",
+  "name": "youtubei-related-server",
   "version": "1.0.0",
-  "description": "YouTube stream info API using youtubei.js",
-  "main": "server.js",
+  "description": "YouTube related videos API with youtubei.js",
+  "main": "index.js",
+  "type": "module",  
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
-    "youtubei.js": "^16.0.1"
+    "youtubei.js": "^7.1.0" 
   }
 }
