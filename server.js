@@ -1,83 +1,49 @@
-import YouTube from 'youtubei.js'; 
-import express from 'express';
+const express = require('express');
+const { Innertube } = require('youtubei.js'); // ライブラリのインポート
 
 const app = express();
-// Renderは環境変数PORTを設定します
-const PORT = process.env.PORT || 3000; 
+const port = 3000;
 
-// YouTubeインスタンスの初期化を、アプリの起動前に行う
-let youtube;
-(async () => {
-    try {
-        // YouTubeクラスのインスタンス化
-        youtube = await new YouTube();
-        console.log('✅ YouTube client initialized.');
-    } catch (error) {
-        console.error('❌ Failed to initialize YouTube client:', error);
-    }
-})();
-
-// CORSエラーを避けるため、全オリジンからのアクセスを許可
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    next();
-});
-
-// ヘルスチェック用エンドポイント (Renderがサーバーの生存確認に使用)
-app.get('/', (req, res) => {
-    res.status(200).send('API Server is running!');
-});
-
-
-/**
- * GET /get/:videoid
- * 関連動画のリストを返します。
- */
 app.get('/get/:videoid', async (req, res) => {
-    const { videoid } = req.params;
+  const videoId = req.params.videoid;
 
-    if (!youtube) {
-        // 初期化が完了していない場合は503を返す
-        return res.status(503).json({ error: 'Server not ready. YouTube client is still initializing.' });
-    }
+  try {
+    // Innertubeクライアントを初期化
+    const youtube = await Innertube.create();
 
-    if (!videoid || videoid.length !== 11) {
-        return res.status(400).json({ error: 'Invalid Video ID format.' });
-    }
+    // 動画情報の取得
+    const info = await youtube.getInfo(videoId); 
 
-    try {
-        console.log(`Fetching related for video: ${videoid}`);
-        
-        // youtubei.jsで動画情報を取得
-        const videoInfo = await youtube.getInfo(videoid);
-        
-        // 関連動画は 'related' プロパティにあるはずです
-        const relatedVideos = videoInfo?.related || []; 
+    // 取得したデータ構造から必要な情報を抽出
+    const result = {
+      title: info.basic_details.title,
+      description: info.basic_details.short_description,
+      viewCount: info.basic_details.view_count,
+      likeCount: info.basic_details.likes, // 좋아요 수는 APIで取得できるか確認が必要
+      channelName: info.basic_details.channel.name,
+      channelId: info.basic_details.channel_id,
+      // channelIconはinfo.basic_details.channel.thumbnailsから取得
+      channelIcon: info.basic_details.channel.thumbnails.find(t => t.id === 'default')?.url, 
 
-        res.json({
-            video_id: videoid,
-            related_videos_count: relatedVideos.length,
-            related: relatedVideos
-        });
+      // 関連動画はinfo.related_videosから取得
+      relatedVideos: info.related_videos.slice(0, 5).map(v => ({
+        id: v.id,
+        title: v.title.text
+      })),
 
-    } catch (error) {
-        console.error(`Error fetching related videos for ${videoid}:`, error);
-        
-        // YouTube APIから見つからないなどのエラーの場合は404を返す
-        if (error.message.includes('No video found') || error.message.includes('404')) {
-             return res.status(404).json({ error: 'Video not found or is private/deleted.' });
-        }
-        
-        res.status(500).json({ 
-            error: 'Failed to retrieve data from YouTube.', 
-            details: error.message 
-        });
-    }
+      // コメントはinfo.getComments() メソッドなどで取得
+      // 非同期操作が必要な場合があるため、実装を確認してください
+      comments: [] // ここにコメント取得ロジックを追加
+    };
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error with youtubei.js:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch video details using youtubei.js', details: error.message });
+  }
 });
 
-// サーバーの起動
-app.listen(PORT, () => {
-    console.log(`🚀 Server listening on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
 });
