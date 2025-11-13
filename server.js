@@ -1,32 +1,25 @@
 const express = require('express');
 const youtubei = require('youtubei.js');
-
-// 💡 修正箇所: youtubei.jsのデフォルトエクスポートからClientクラスを取得
-// Node.js (CommonJS) 環境でESMライブラリを扱うための最も確実な方法の一つ
-const Client = youtubei.default || youtubei.Client; 
-
-// ClientがFunction（コンストラクタ）として取得できているか最終確認
-if (typeof Client !== 'function') {
-    // 取得できなかった場合は、フォールバックとしてパッケージ全体から探すなどするが、
-    // ここでは最も確実な Client = youtubei.default に固定します。
-    // エラーが続く場合は、Client=youtubei.Client を試してください。
-    
-    // 念のため、Clientがclassとして取得できない場合の最終手段として、以前のコードを使用します
-    // (ただし、これはデバッグ用です)
-    const YoutubeIClient = youtubei.Client || youtubei.default; 
-    
-    if (typeof YoutubeIClient !== 'function' || !/^\s*class\s+/.test(YoutubeIClient.toString())) {
-        console.error("Critical Error: Cannot find the Client constructor in youtubei.js export.");
-        process.exit(1); 
-    }
-}
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Clientのインスタンス化
-// Client = youtubei.default が成功することを期待
+// 💡 修正箇所: Clientコンストラクタを確実に取得。
+// youtubei.js v7系では、requireの結果がそのままClientクラスであることが多いです。
+const Client = youtubei.Client || youtubei; 
+
+// ClientがFunction（コンストラクタ）として取得できていない場合は致命的なエラー
+if (typeof Client !== 'function') {
+    console.error("Critical Error: The imported 'youtubei.js' object is not a valid constructor.");
+    process.exit(1); 
+}
+
 const client = new Client(); 
+
+// 🚨 重要なチェック: Clientインスタンスに getVideo メソッドが存在するか確認
+if (typeof client.getVideo !== 'function') {
+    console.error("Critical Error: The Client instance does not have a 'getVideo' method. This means the wrong object was instantiated. Please ensure your youtubei.js version is correct.");
+    process.exit(1);
+}
 
 app.use(express.json());
 
@@ -44,7 +37,7 @@ app.get('/get/:videoid', async (req, res) => {
     const videoId = req.params.videoid;
 
     try {
-        const videoInfo = await client.getVideo(videoId);
+        const videoInfo = await client.getVideo(videoId); // client.getVideo が実行される
 
         const formats = videoInfo.formats; 
 
