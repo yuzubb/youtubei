@@ -1,0 +1,14 @@
+{
+  "name": "youtubei-stream-api",
+  "version": "1.0.0",
+  "description": "YouTube stream info API using youtubei.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "youtubei.js": "^7.3.0"
+  }
+}
