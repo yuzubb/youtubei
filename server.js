@@ -1,9 +1,12 @@
 const express = require('express');
+// 💡 修正箇所1: youtubei.jsのエクスポート全体を取得
 const youtubei = require('youtubei.js');
+// 💡 修正箇所2: 取得したオブジェクトからClientクラスを取り出す
 const { Client } = youtubei; 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 修正されたClientの初期化
 const client = new Client(); 
 
 app.use(express.json());
@@ -62,7 +65,6 @@ app.get('/', (req, res) => {
     res.send('API is running. Use /get/:videoid.');
 });
 
-// 起動時のログを出力
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
