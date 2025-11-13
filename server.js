@@ -4,7 +4,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 💡 修正箇所: Clientコンストラクタを確実に取得。
-// youtubei.js v7系では、requireの結果がそのままClientクラスであることが多いです。
 const Client = youtubei.Client || youtubei; 
 
 // ClientがFunction（コンストラクタ）として取得できていない場合は致命的なエラー
@@ -15,9 +14,10 @@ if (typeof Client !== 'function') {
 
 const client = new Client(); 
 
-// 🚨 重要なチェック: Clientインスタンスに getVideo メソッドが存在するか確認
-if (typeof client.getVideo !== 'function') {
-    console.error("Critical Error: The Client instance does not have a 'getVideo' method. This means the wrong object was instantiated. Please ensure your youtubei.js version is correct.");
+// 🚨 重要なチェック: Clientインスタンスに getWatch メソッドが存在するか確認
+// 関連動画の取得には通常 getWatch が使用されます
+if (typeof client.getWatch !== 'function') {
+    console.error("Critical Error: The Client instance does not have a 'getWatch' method. Please check your youtubei.js version.");
     process.exit(1);
 }
 
@@ -33,48 +33,52 @@ app.use((req, res, next) => {
     next();
 });
 
+// 📌 修正後のエンドポイント: 関連動画を取得する
 app.get('/get/:videoid', async (req, res) => {
     const videoId = req.params.videoid;
 
     try {
-        const videoInfo = await client.getVideo(videoId); // client.getVideo が実行される
+        // 1. getWatch() を使用して視聴ページ全体のデータを取得
+        // 関連動画はこのデータに含まれていることが多い
+        const watchPage = await client.getWatch(videoId); 
 
-        const formats = videoInfo.formats; 
+        // 2. 関連動画のデータを抽出
+        // youtubei.js のバージョンによって、このパスは異なる場合があります。
+        // 一般的には secondary_results に関連動画のリストが含まれています。
+        const relatedVideos = watchPage.secondary_results.results || [];
 
-        const encryptedFormats = formats.map(format => {
-            let streamUrl = format.url;
-            let cipherInfo = null;
-
-            if (!streamUrl && format.signature_cipher) {
-                cipherInfo = format.signature_cipher; 
-            }
-
-            return {
-                quality: format.quality_label || 'unknown',
-                mimeType: format.mime_type,
-                url: streamUrl, 
-                encryptedSignature: format.signature_cipher ? 'REQUIRED_DECRYPTION' : null, 
-                rawCipherInfo: cipherInfo 
-            };
-        });
+        // 3. 必要な情報に整形する
+        const simplifiedRelatedVideos = relatedVideos
+            // フィルタリング: リスト内で動画として認識できるアイテムのみを対象とする
+            .filter(item => item.constructor.name === 'Video') 
+            .map(video => ({
+                videoId: video.id,
+                title: video.title.text,
+                author: video.author.name,
+                // duration: video.duration.text, // 必要に応じて追加
+                // viewCount: video.view_count.text, // 必要に応じて追加
+                isLive: video.is_live,
+            }));
         
         res.status(200).json({
             videoId: videoId,
-            title: videoInfo.title,
-            warning: "The 'url' may be encrypted. Signature decryption logic is missing.",
-            formats: encryptedFormats
+            videoTitle: watchPage.video_details.title,
+            relatedVideosCount: simplifiedRelatedVideos.length,
+            relatedVideos: simplifiedRelatedVideos
         });
 
     } catch (error) {
+        // 関連動画の取得に失敗した場合（動画が存在しない、APIのパスが変わったなど）
         res.status(500).json({ 
-            error: 'Failed to fetch video stream information using youtubei.js.',
-            detail: error.message 
+            error: 'Failed to fetch related videos using youtubei.js.',
+            detail: error.message,
+            note: "The internal structure of YouTube's response may have changed. Check the 'secondary_results' path."
         });
     }
 });
 
 app.get('/', (req, res) => {
-    res.send('API is running. Use /get/:videoid.');
+    res.send('API is running. Use /get/:videoid to fetch related videos.');
 });
 
 app.listen(PORT, () => {
